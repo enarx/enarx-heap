@@ -32,7 +32,7 @@ impl Heap {
     /// The caller has to ensure the `heap` points to valid free memory.
     pub unsafe fn new(heap: Span<usize>) -> Self {
         // Bits per page
-        const BPP: usize = Page::size() * 8;
+        const BPP: usize = Page::SIZE * 8;
 
         // A page-aligned heap
         let heap = slice(heap.start as *mut u8, heap.count as _)
@@ -94,7 +94,7 @@ impl Heap {
 
     fn offset(&self, addr: usize) -> Option<usize> {
         let base = self.pages.as_ptr() as usize;
-        let ceil = base + self.pages.len() * Page::size();
+        let ceil = base + self.pages.len() * Page::SIZE;
 
         if base <= addr {
             if addr < ceil {
@@ -109,11 +109,11 @@ impl Heap {
 
     fn offset_page_down(&self, addr: usize) -> Option<usize> {
         let off = self.offset(addr)?;
-        Some(off / Page::size())
+        Some(off / Page::SIZE)
     }
 
     fn offset_page_up(&self, addr: usize) -> Option<usize> {
-        self.offset_page_down(addr + Page::size() - 1)
+        self.offset_page_down(addr + Page::SIZE - 1)
     }
 
     /// Allocate heap memory to address `brk`
@@ -163,7 +163,7 @@ impl Heap {
         }
 
         // The number of pages we need for the given length.
-        let pages = (length + Page::size() - 1) / Page::size();
+        let pages = (length + Page::SIZE - 1) / Page::SIZE;
 
         // Find the brk page offset.
         let brk = self.offset_page_up(self.metadata.brk.end).unwrap();
@@ -193,7 +193,7 @@ impl Heap {
     pub fn munmap<T>(&mut self, addr: *const T, length: usize) -> Result<(), libc::c_int> {
         let addr = addr as usize;
 
-        if addr % Page::size() != 0 {
+        if addr % Page::SIZE != 0 {
             return Err(libc::EINVAL);
         }
 
@@ -235,7 +235,7 @@ mod tests {
         let aligned = unsafe { bytes.align_to_mut::<Page>().1 };
         let span = Span {
             start: aligned.as_mut_ptr() as _,
-            count: (aligned.len() * Page::size()) as _,
+            count: (aligned.len() * Page::SIZE) as _,
         };
         let heap = unsafe { Heap::new(span) };
 
@@ -256,15 +256,15 @@ mod tests {
 
     fn oneshot(heap: &mut Heap, pages: usize) {
         let brk_page = heap.pages.len() - pages;
-        let brk = heap.metadata.brk.start + brk_page * Page::size();
+        let brk = heap.metadata.brk.start + brk_page * Page::SIZE;
         let ret = heap.brk(brk);
         assert_eq!(ret, brk);
 
         let steps = [
-            (Page::size(), 1),
-            (Page::size() / 2, 1),
-            (Page::size() + Page::size() / 2, 2),
-            (pages * Page::size(), pages),
+            (Page::SIZE, 1),
+            (Page::SIZE / 2, 1),
+            (Page::SIZE + Page::SIZE / 2, 2),
+            (pages * Page::SIZE, pages),
         ];
 
         for (s, allocated) in steps.iter() {
@@ -281,14 +281,14 @@ mod tests {
         }
 
         // try to allocate memory whose size exceeds the total heap size
-        let len = heap.pages.len() * Page::size() + 1;
+        let len = heap.pages.len() * Page::SIZE + 1;
         let ret = heap.mmap::<c_void>(0, len, PROT, FLAGS, -1, 0);
         assert_eq!(ret.unwrap_err(), libc::ENOMEM);
     }
 
     #[test]
     fn mmap_munmap_oneshot() {
-        let bytes = &mut [0; Page::size() * NUM_PAGES];
+        let bytes = &mut [0; Page::SIZE * NUM_PAGES];
         let mut heap = new_checked(bytes);
 
         let pages = heap.pages.len();
@@ -298,11 +298,11 @@ mod tests {
 
     fn incremental(heap: &mut Heap, pages: usize) {
         let brk_page = heap.pages.len() - pages;
-        let brk = heap.metadata.brk.start + brk_page * Page::size();
+        let brk = heap.metadata.brk.start + brk_page * Page::SIZE;
         let ret = heap.brk(brk);
         assert_eq!(ret, brk);
 
-        let steps = [Page::size(), Page::size() / 2];
+        let steps = [Page::SIZE, Page::SIZE / 2];
 
         for s in steps.iter() {
             let mut addrs = [null_mut::<libc::c_void>(); NUM_PAGES];
@@ -332,7 +332,7 @@ mod tests {
 
     #[test]
     fn mmap_munmap_incremental() {
-        let bytes = &mut [0; Page::size() * NUM_PAGES];
+        let bytes = &mut [0; Page::SIZE * NUM_PAGES];
         let mut heap = new_checked(bytes);
 
         let pages = heap.pages.len();
