@@ -10,5 +10,5 @@ publish = false
 
 [dependencies]
 libc = { version = "0.2", default-features = false }
-primordial = "0.3"
+primordial = "0.4"
 lset = "0.2"
